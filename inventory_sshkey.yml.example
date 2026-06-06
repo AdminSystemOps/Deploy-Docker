@@ -1,0 +1,16 @@
+---
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: /usr/bin/python3
+      
+  children:
+    docker_hosts:
+      hosts:
+        srv-docker:
+          ansible_host: 192.168.1.10
+          ansible_user: sysadmin
+          ansible_port: 22
+          ansible_become_password: MotDePasseSudo
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519

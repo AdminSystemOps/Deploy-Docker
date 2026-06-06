@@ -1,0 +1,112 @@
+---
+- name: Installer Docker Engine sur Debian
+  hosts: docker_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    docker_repo_url: "https://download.docker.com/linux/debian"
+    docker_keyring_path: "/etc/apt/keyrings/docker.asc"
+    docker_debian_codename: "{{ ansible_distribution_release | lower }}"
+
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+
+    docker_users:
+      - "{{ ansible_user }}"
+
+  pre_tasks:
+    - name: Vérifier que la distribution est Debian
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Debian"
+        fail_msg: "Ce playbook est prévu pour Debian uniquement."
+
+    - name: Vérifier que la version Debian est supportée
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution_major_version in ["11", "12", "13"]
+        fail_msg: "Version Debian non supportée par ce playbook."
+
+    - name: Mettre à jour le cache APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Supprimer les anciens paquets Docker conflictuels
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - podman-docker
+          - containerd
+          - runc
+        state: absent
+        purge: true
+
+    - name: Installer les prérequis APT
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+
+    - name: Créer le dossier des keyrings APT
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Ajouter la clé GPG officielle Docker
+      ansible.builtin.get_url:
+        url: "{{ docker_repo_url }}/gpg"
+        dest: "{{ docker_keyring_path }}"
+        mode: "0644"
+
+    - name: Ajouter le dépôt APT officiel Docker
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by={{ docker_keyring_path }}] {{ docker_repo_url }} {{ docker_debian_codename }} stable"
+        filename: docker
+        state: present
+        update_cache: true
+
+  tasks:
+    - name: Installer Docker Engine et les plugins Docker
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+
+    - name: Activer et démarrer le service Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Ajouter les utilisateurs autorisés au groupe docker
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: docker
+        append: true
+      loop: "{{ docker_users }}"
+
+    - name: Vérifier la version de Docker
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Vérifier la version de Docker Compose
+      ansible.builtin.command: docker compose version
+      register: docker_compose_version
+      changed_when: false
+
+    - name: Afficher les versions installées
+      ansible.builtin.debug:
+        msg:
+          - "{{ docker_version.stdout }}"
+          - "{{ docker_compose_version.stdout }}"

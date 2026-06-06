@@ -1,0 +1,5 @@
+# Dépendances Python nécessaires au projet Deploy-Docker
+# Installation :
+# pip install -r requirements.txt
+
+ansible==12.0.0
